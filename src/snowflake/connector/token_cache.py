@@ -19,6 +19,7 @@ from threading import Lock
 from .compat import IS_LINUX, IS_MACOS, IS_WINDOWS
 from .file_util import owner_rw_opener
 from .options import installed_keyring, keyring
+from .token_encryption import TokenEncryption
 
 KEYRING_DRIVER_NAME = "SNOWFLAKE-PYTHON-DRIVER"
 
@@ -49,7 +50,7 @@ class TokenCache(ABC):
         )
 
     @staticmethod
-    def make() -> TokenCache:
+    def make(encryption_class=None) -> TokenCache:
         if IS_MACOS or IS_WINDOWS:
             if not installed_keyring:
                 logging.getLogger(__name__).debug(
@@ -62,7 +63,7 @@ class TokenCache(ABC):
             return KeyringTokenCache()
 
         if IS_LINUX:
-            return FileTokenCache()
+            return FileTokenCache(encryption_class)
 
     @abstractmethod
     def store(self, key: TokenKey, token: str) -> None:
@@ -79,7 +80,7 @@ class TokenCache(ABC):
 
 class FileTokenCache(TokenCache):
 
-    def __init__(self):
+    def __init__(self, encryption_class=None) -> None:
         self.logger = logging.getLogger(__name__)
         self.CACHE_ROOT_DIR = (
             getenv("SF_TEMPORARY_CREDENTIAL_CACHE_DIR")
@@ -87,7 +88,11 @@ class FileTokenCache(TokenCache):
             or tempfile.gettempdir()
         )
         self.CACHE_DIR = path.join(self.CACHE_ROOT_DIR, ".cache", "snowflake")
-
+        
+        self.encryption = None
+        if encryption_class is not None:
+            self.encryption = encryption_class()
+            
         if not path.exists(self.CACHE_DIR):
             try:
                 makedirs(self.CACHE_DIR, mode=0o700)
@@ -136,7 +141,11 @@ class FileTokenCache(TokenCache):
                 errors="ignore",
                 opener=owner_rw_opener,
             ) as f:
-                json.dump(self.TEMPORARY_CREDENTIAL, f)
+                if self.encryption is None:
+                    json.dump(self.TEMPORARY_CREDENTIAL, f)
+                else:
+                    encrypted: str = self.encryption.encrypt(json.dumps(self.TEMPORARY_CREDENTIAL))
+                    f.write(encrypted)
         except Exception as ex:
             self.logger.debug(
                 "Failed to write a credential file: " "file=[%s], err=[%s]",
@@ -203,7 +212,11 @@ class FileTokenCache(TokenCache):
                     encoding="utf-8",
                     errors="ignore",
                 ) as f:
-                    self.TEMPORARY_CREDENTIAL = json.load(f)
+                    if self.encryption is None:
+                        self.TEMPORARY_CREDENTIAL = json.load(f)
+                    else:
+                        data = self.ENCRYPTION.decrypt(f.read())
+                        self.TEMPORARY_CREDENTIAL = json.loads(data)
                 return self.TEMPORARY_CREDENTIAL
             except Exception as ex:
                 self.logger.debug(

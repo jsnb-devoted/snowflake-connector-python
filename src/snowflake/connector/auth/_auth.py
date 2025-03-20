@@ -88,9 +88,9 @@ AUTHENTICATION_REQUEST_KEY_WHITELIST = {
 class Auth:
     """Snowflake Authenticator."""
 
-    def __init__(self, rest) -> None:
+    def __init__(self, rest, encryption_class=None) -> None:
         self._rest = rest
-        self.token_cache = TokenCache.make()
+        self.token_cache = TokenCache.make(encryption_class)
 
     @staticmethod
     def base_auth_data(
