@@ -19,7 +19,6 @@ from threading import Lock
 from .compat import IS_LINUX, IS_MACOS, IS_WINDOWS
 from .file_util import owner_rw_opener
 from .options import installed_keyring, keyring
-from .token_encryption import TokenEncryption
 
 KEYRING_DRIVER_NAME = "SNOWFLAKE-PYTHON-DRIVER"
 
@@ -215,7 +214,7 @@ class FileTokenCache(TokenCache):
                     if self.encryption is None:
                         self.TEMPORARY_CREDENTIAL = json.load(f)
                     else:
-                        data = self.ENCRYPTION.decrypt(f.read())
+                        data = self.encryption.decrypt(f.read())
                         self.TEMPORARY_CREDENTIAL = json.loads(data)
                 return self.TEMPORARY_CREDENTIAL
             except Exception as ex:
