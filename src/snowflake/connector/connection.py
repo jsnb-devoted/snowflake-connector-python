@@ -64,6 +64,7 @@ from .constants import (
     PARAMETER_CLIENT_SESSION_KEEP_ALIVE,
     PARAMETER_CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY,
     PARAMETER_CLIENT_STORE_TEMPORARY_CREDENTIAL,
+    PARAMETER_CLIENT_ENCRYPT_TEMPORARY_CREDENTIAL_CLASS,
     PARAMETER_CLIENT_TELEMETRY_ENABLED,
     PARAMETER_CLIENT_VALIDATE_DEFAULT_PARAMETERS,
     PARAMETER_ENABLE_STAGE_S3_PRIVATELINK_FOR_US_EAST_1,
@@ -1037,7 +1038,7 @@ class SnowflakeConnection:
             )
 
         # Setup authenticator
-        auth = Auth(self.rest)
+        auth = Auth(self.rest, self._encryption_class)
 
         if self._session_token and self._master_token:
             auth._rest.update_tokens(
@@ -1279,6 +1280,10 @@ class SnowflakeConnection:
             self._unsafe_file_write = kwargs["unsafe_file_write"]
         else:
             self._unsafe_file_write = False
+
+        self._encryption_class = None
+        if "encryption_class" in kwargs:
+            self._encryption_class = kwargs["encryption_class"]
 
         logger.info(
             f"Connecting to {_DOMAIN_NAME_MAP.get(extract_top_level_domain_from_hostname(self._host), 'GLOBAL')} Snowflake domain"
@@ -1525,7 +1530,7 @@ class SnowflakeConnection:
             auth_instance, "consent_cache_id_token", True
         )
 
-        auth = Auth(self.rest)
+        auth = Auth(self.rest, self._encryption_class)
         # record start time for computing timeout
         auth_instance._retry_ctx.set_start_time()
         try:
